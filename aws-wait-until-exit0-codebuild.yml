@@ -1,0 +1,20 @@
+#Set up the variables. Top 3 required. 
+- HOSTNAME="hostname"
+- SCRIPT="AWS SSM Document name goes here"
+- SERVICE_ROLE="service role"
+
+#Set up command and instance variables, no input required. 
+- INSTANCE_ID=$(aws ec2 describe-instances --filters Name=tag:hostname,Values=$HOSTNAME Name=instance-state-name,Values=running --output text --query 'Reservations[*].Instances[*].InstanceId')     
+
+- COMMAND_ID=$(aws ssm send-command --document-name "$SCRIPT" --instance-ids "$INSTANCE_ID" --comment "Windows In Place Patching" --parameters "KbNumber=$KBNUMBER" --service-role-arn "$SERVICE_ROLE" --query "Command.CommandId" --output text)
+
+#Run BASH script to check for exit0. Once found, proceed with the build. 
+- |
+#!/bin/bash
+EXIT_STATUS=1
+echo "Waiting for install script to complete"
+until [ "$EXIT_STATUS" = "0" ]
+do
+    aws ssm wait command-executed --command-id $COMMAND_ID --instance-id "$INSTANCE_ID"
+    EXIT_STATUS=$?
+done
